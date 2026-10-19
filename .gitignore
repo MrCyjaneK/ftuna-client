@@ -1,0 +1,7 @@
+/ftuna
+/libftuna.so
+/libftuna.h
+/src/moc_ftuna.cpp
+/rpms/
+*.list
+.DS_Store

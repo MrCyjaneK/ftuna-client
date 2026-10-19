@@ -1,0 +1,4 @@
+# Allow ftuna to manage packages, same as SailfishOS:Chum.
+# A non-empty privilege keeps the booster's privileged group, which
+# PackageKit accepts without asking for the security code.
+/usr/bin/ftuna,r

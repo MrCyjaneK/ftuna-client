@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FTuna
+Icon=ftuna
+Exec=invoker --type=silica-qt5 -s /usr/bin/ftuna
+Categories=Utility;
+X-Nemo-Application-Type=silica-qt5
+
+[X-Sailjail]
+Sandboxing=Disabled

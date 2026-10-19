@@ -1,0 +1,32 @@
+Name: ftuna
+Summary: FTuna software catalog
+Version: 0.1.0
+Release: 5
+Group: Qt/Qt
+License: GPLv3
+URL: https://ftuna.eu
+Sources:
+    - "%{name}-%{version}.tar.bz2"
+Description: |
+    Browse and install software from the FTuna catalogs.
+Configure: none
+Builder: make
+PkgConfigBR:
+    - sailfishapp >= 1.0.2
+    - Qt5Core
+    - Qt5Qml
+    - Qt5Quick
+    - Qt5Concurrent
+    - packagekitqt5
+Requires:
+    - sailfishsilica-qt5 >= 0.10.9
+    - git
+Files:
+    - "%{_bindir}/ftuna"
+    - "/usr/lib/ftuna"
+    - "%{_datadir}/ftuna"
+    - "%{_datadir}/applications/%{name}.desktop"
+    - "%{_datadir}/mapplauncherd/privileges.d/ftuna"
+    - "%{_datadir}/icons/hicolor/*/apps/%{name}.png"
+Macros:
+    - "__strip;/bin/true"
