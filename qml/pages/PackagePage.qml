@@ -88,6 +88,16 @@ Page {
         rpms: pkg.rpms || []
     }]
     readonly property var active: sources[Math.min(sourceIndex, sources.length - 1)]
+    readonly property bool sourceEnabled: {
+        var index = sourceIndex
+        var src = sourceAt(index)
+        if (!src)
+            return false
+        var url = src.repo_url || pkg.repo_url || ""
+        if (!url)
+            return src.enabled === true
+        return repoOn(url)
+    }
 
     property bool sampleReport: false
     property var reportDeps: []
@@ -180,6 +190,8 @@ Page {
     }
 
     function install() {
+        if (!sourceEnabled)
+            return
         var specs = Ui.selectedSpecs(rpmModel)
         if (specs.length === 0)
             return
@@ -295,7 +307,7 @@ Page {
         PullDownMenu {
             MenuItem {
                 text: "Install"
-                enabled: page.selected > 0
+                enabled: page.selected > 0 && page.sourceEnabled
                 onClicked: page.install()
             }
             MenuItem {

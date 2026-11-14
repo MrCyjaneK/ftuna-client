@@ -11,7 +11,6 @@ export GOWORK := off
 .PHONY: all install clean
 
 all:
-	pkg-config --exists packagekitqt5 || zypper --non-interactive in PackageKit-Qt5-devel
 	$(GO) build -mod=vendor -buildmode=c-shared -o libftuna.so ./capi
 	moc $$(pkg-config --cflags Qt5Core) src/ftuna.h -o src/moc_ftuna.cpp
 	g++ -std=c++11 -fPIC -O2 -Wall \

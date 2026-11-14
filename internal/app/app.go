@@ -991,6 +991,21 @@ func (a *App) Preview(repoURL string, names []string) (install.Plan, error) {
 		return install.Plan{}, err
 	}
 	defer closeSys()
+	if bus, ok := sys.(*install.DBus); ok {
+		bus.SetProgress(func(label string, percent int) {
+			if label != "" {
+				a.setStatus(label)
+			}
+			if percent >= 0 && percent <= 100 {
+				a.setProgress(percent)
+			}
+		})
+		defer bus.SetProgress(nil)
+	}
+	defer a.setStatus("")
+	defer a.setProgress(0)
+	a.setStatus("Checking changes")
+	a.setProgress(0)
 	ids, err := install.PackageIDs(sys, repoURL, chosen)
 	if err != nil {
 		return install.Plan{}, err
