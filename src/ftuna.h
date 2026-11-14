@@ -86,6 +86,7 @@ private:
     bool m_busy;
     bool m_refreshing;
     bool m_installing;
+    bool m_previewing;
     bool m_refreshAgain;
     bool m_onboarded;
     QString m_notice;

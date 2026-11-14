@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 Ftuna::Ftuna(QObject *parent)
-    : QObject(parent), m_busy(false), m_refreshing(false), m_installing(false), m_refreshAgain(false), m_onboarded(false), m_haveSystemRepos(false), m_ratingsBaseline(0), m_taskProgress(0) {
+    : QObject(parent), m_busy(false), m_refreshing(false), m_installing(false), m_previewing(false), m_refreshAgain(false), m_onboarded(false), m_haveSystemRepos(false), m_ratingsBaseline(0), m_taskProgress(0) {
     m_timer.setInterval(200);
     connect(&m_timer, &QTimer::timeout, this, &Ftuna::pollProgress);
     m_ratingsTimer.setInterval(200);
@@ -22,6 +22,9 @@ Ftuna::Ftuna(QObject *parent)
 }
 
 int Ftuna::progress() const {
+    if (m_previewing) {
+        return FtunaProgress();
+    }
     if (m_installing) {
         return m_taskProgress;
     }
@@ -117,7 +120,7 @@ QString packageVerb(PackageKit::Transaction::Status status) {
 
 void Ftuna::pollProgress() {
     emit progressChanged();
-    if (m_installing) {
+    if (m_installing && !m_previewing) {
         return;
     }
     char *raw = FtunaStatus();
@@ -437,13 +440,16 @@ void Ftuna::preview(const QString &repoURL, const QStringList &names) {
         return;
     }
     m_installing = true;
+    m_previewing = true;
     m_busy = true;
     m_activity = QStringLiteral("Checking changes");
     m_taskProgress = 0;
     m_previewIds.clear();
     m_previewChanges.clear();
     emit activityChanged();
+    emit progressChanged();
     emit busyChanged();
+    m_timer.start();
     QtConcurrent::run([this, repoURL, names]() { previewWork(repoURL, names); });
 }
 
@@ -571,9 +577,14 @@ void Ftuna::applyPreview(const QString &payload) {
 
 void Ftuna::finishPreview(const QString &error) {
     m_installing = false;
+    m_previewing = false;
     m_busy = false;
+    if (!m_refreshing) {
+        m_timer.stop();
+    }
     m_activity.clear();
     emit activityChanged();
+    emit progressChanged();
     emit busyChanged();
     if (error.isEmpty()) {
         emit changesReady(m_previewChanges);

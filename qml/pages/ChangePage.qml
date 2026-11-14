@@ -303,7 +303,7 @@ Page {
                     wrapMode: Text.Wrap
                     font.pixelSize: Theme.fontSizeSmall
                     color: page.previewError !== "" ? "#e15b64" : Theme.secondaryColor
-                    text: page.checking ? "Checking changes" : (page.previewError !== "" ? page.previewError : page.changeText)
+                    text: page.checking ? (backend.activity !== "" ? backend.activity : "Checking changes") : (page.previewError !== "" ? page.previewError : page.changeText)
                 }
                 SectionHeader {
                     text: "Output"
@@ -338,7 +338,7 @@ Page {
         z: 2
         anchors.bottom: parent.bottom
         width: parent.width
-        height: !page.decided ? answers.height : (page.working ? workColumn.height : 0)
+        height: !page.decided ? checkStrip.height + answers.height : (page.working ? workColumn.height : 0)
         visible: height > 0
         color: Theme.overlayBackgroundColor
 
@@ -378,8 +378,33 @@ Page {
             }
         }
 
+        Column {
+            id: checkStrip
+            width: parent.width
+            visible: page.checking
+            height: visible ? childrenRect.height : 0
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                height: Theme.itemSizeSmall
+                verticalAlignment: Text.AlignVCenter
+                truncationMode: TruncationMode.Fade
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.highlightColor
+                text: backend.activity !== "" ? backend.activity : "Checking changes"
+            }
+            ProgressBar {
+                width: parent.width
+                visible: backend.progress > 0 && backend.progress <= 100
+                height: visible ? implicitHeight : 0
+                value: backend.progress / 100.0
+            }
+        }
+
         Row {
             id: answers
+            y: checkStrip.height
             width: parent.width
             visible: !page.decided
 
