@@ -643,12 +643,9 @@ func (a *App) loadCatalog(pref RepoPref) (catalog.View, error) {
 	if layout.Templated(pref.URL) {
 		return a.loadResolved(pref)
 	}
-	// A scratch repo is rpm-md under aarch64, armv7hl, and i486, with no info.json.xz.
+	// No info.json.xz means a normal rpm-md tree. The error from that read is the one to show.
 	if indexMissing(err) {
-		view, rpmErr := a.loadFlatArch(pref)
-		if rpmErr == nil {
-			return view, nil
-		}
+		return a.loadFlatArch(pref)
 	}
 	return catalog.View{}, err
 }

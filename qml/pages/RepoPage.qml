@@ -81,8 +81,12 @@ Page {
                 var note = "This phone is " + rows[i].device_release + " " + rows[i].arch + ". Using " + rows[i].chosen_release + " at " + rows[i].url
                 return { text: note, problem: note }
             }
-            if (rows[i].url)
-                return { text: rows[i].chosen_release + " " + rows[i].arch + " at " + rows[i].url, problem: "" }
+            if (rows[i].url) {
+                var place = rows[i].arch + " at " + rows[i].url
+                if (rows[i].chosen_release)
+                    place = rows[i].chosen_release + " " + place
+                return { text: place, problem: "" }
+            }
         }
         return { text: "", problem: "" }
     }

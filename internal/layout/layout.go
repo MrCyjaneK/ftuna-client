@@ -1,6 +1,7 @@
 // Package layout turns a repository URL pattern into a concrete rpm directory.
-// Patterns use {version} and {arch}. The listing at the static prefix supplies
-// the releases, and the phone keeps its own release or the closest older one.
+// Patterns use {version} and {arch}. A version pattern reads the listing at the
+// static prefix and keeps the phone's release or the closest older one.
+// {arch} alone is a normal repository: that architecture directory is the rpm root.
 package layout
 
 import (
@@ -39,14 +40,63 @@ func Prefix(raw string) string {
 	return raw[:i]
 }
 
+// NeedsListing reports whether resolving the pattern requires a directory index.
+// {arch} is filled from the phone and does not need one.
+func NeedsListing(raw string) bool {
+	_, kind, err := split(raw)
+	return err != nil || kind != "{arch}"
+}
+
+// RPMDir is the rpm-md directory for a repository that publishes no info.json.xz.
+// A URL that already ends in an architecture is that directory.
+// Otherwise the phone's architecture is a subdirectory, as in a scratch repository.
+func RPMDir(raw, deviceArch string) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(raw), "/")
+	base = strings.TrimSuffix(base, "/info.json.xz")
+	base = strings.TrimRight(base, "/")
+	if base == "" || !strings.Contains(base, "://") {
+		return "", fmt.Errorf("repository URL is empty")
+	}
+	if name, ok := archName(base); ok {
+		if name == "armv7l" {
+			base = strings.TrimSuffix(base, name) + "armv7hl"
+		}
+		return base + "/", nil
+	}
+	arch := catalog.NormalizeArch(deviceArch)
+	if arch == "" {
+		return "", fmt.Errorf("no architecture")
+	}
+	return base + "/" + arch + "/", nil
+}
+
+func archName(raw string) (string, bool) {
+	i := strings.LastIndex(raw, "/")
+	if i < 0 {
+		return "", false
+	}
+	switch raw[i+1:] {
+	case "aarch64", "armv7hl", "armv7l", "i486":
+		return raw[i+1:], true
+	default:
+		return "", false
+	}
+}
+
 // Matches lists acceptable releases, newest first. fallback is set when the
-// directory is older than the phone.
+// directory is older than the phone. {arch} ignores the listing and the release.
 func Matches(pattern, device, arch, html string) ([]Hit, error) {
 	prefix, kind, err := split(pattern)
 	if err != nil {
 		return nil, err
 	}
 	arch = catalog.NormalizeArch(arch)
+	if kind == "{arch}" {
+		if arch == "" {
+			return nil, fmt.Errorf("no architecture")
+		}
+		return []Hit{{URL: concrete(prefix, kind, "", arch)}}, nil
+	}
 	var hits []Hit
 	for _, name := range dirNames(html) {
 		ver, dirArch, ok := matchName(kind, name)
@@ -82,7 +132,7 @@ func split(pattern string) (prefix, kind string, err error) {
 	prefix = pattern[:i]
 	kind = strings.Trim(pattern[i:], "/")
 	switch kind {
-	case "{version}/{arch}", "{version}_{arch}":
+	case "{version}/{arch}", "{version}_{arch}", "{arch}":
 		return prefix, kind, nil
 	default:
 		return "", "", fmt.Errorf("unsupported repository pattern %s", kind)
@@ -141,10 +191,14 @@ func majorMinor(version string) (string, bool) {
 }
 
 func concrete(prefix, kind, version, arch string) string {
-	if kind == "{version}/{arch}" {
+	switch kind {
+	case "{version}/{arch}":
 		return prefix + version + "/" + arch + "/"
+	case "{arch}":
+		return prefix + arch + "/"
+	default:
+		return prefix + version + "_" + arch + "/"
 	}
-	return prefix + version + "_" + arch + "/"
 }
 
 func dirNames(html string) []string {

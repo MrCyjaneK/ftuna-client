@@ -49,6 +49,45 @@ func TestPreferChumKeepsFullReleaseBefore46(t *testing.T) {
 	}
 }
 
+func TestArchOnly(t *testing.T) {
+	pattern := "https://sfos.repo.mrcyjanek.net/{arch}/"
+	if NeedsListing(pattern) || !NeedsListing("https://repo-oss.ftuna.eu/{version}/{arch}/") {
+		t.Fatal("listing requirement")
+	}
+	hits, err := Matches(pattern, "5.2.0.17", "aarch64", `<a href="nope/">x</a>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Fallback || hits[0].Version != "" || hits[0].URL != "https://sfos.repo.mrcyjanek.net/aarch64/" {
+		t.Fatalf("%+v", hits)
+	}
+	hits, err = Matches(pattern, "5.2.0.17", "armv7l", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits[0].URL != "https://sfos.repo.mrcyjanek.net/armv7hl/" {
+		t.Fatal(hits[0].URL)
+	}
+	if _, err := Matches(pattern, "5.2.0.17", "", ""); err == nil {
+		t.Fatal("empty arch")
+	}
+	if _, err := Matches("https://example.com/{arch}/extra/", "5.2.0.17", "aarch64", ""); err == nil {
+		t.Fatal("expected unsupported pattern")
+	}
+	dir, err := RPMDir("https://sfos.repo.mrcyjanek.net/aarch64/", "armv7hl")
+	if err != nil || dir != "https://sfos.repo.mrcyjanek.net/aarch64/" {
+		t.Fatalf("%s %v", dir, err)
+	}
+	dir, err = RPMDir("https://sfos.repo.mrcyjanek.net/armv7l", "aarch64")
+	if err != nil || dir != "https://sfos.repo.mrcyjanek.net/armv7hl/" {
+		t.Fatalf("%s %v", dir, err)
+	}
+	dir, err = RPMDir("https://sfos.repo.mrcyjanek.net/", "armv7l")
+	if err != nil || dir != "https://sfos.repo.mrcyjanek.net/armv7hl/" {
+		t.Fatalf("%s %v", dir, err)
+	}
+}
+
 func TestSplitExact(t *testing.T) {
 	html := `<a href="5.1.0.11/">old</a><a href="5.2.0.17/">now</a><a href="info.json.xz">index</a>`
 	pattern := "https://repo-oss.ftuna.eu/{version}/{arch}/"

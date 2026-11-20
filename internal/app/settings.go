@@ -261,8 +261,10 @@ func cleanCustom(repo RepoPref) (RepoPref, bool) {
 }
 
 // normalizeRepoURL keeps {version} and {arch} as written. url.URL would encode the braces.
+// %(arch) is the ssu spelling of {arch}.
 func normalizeRepoURL(raw string) (urlStr, host string, ok bool) {
 	raw = strings.TrimSpace(raw)
+	raw = strings.ReplaceAll(raw, "%(arch)", "{arch}")
 	raw = strings.TrimSuffix(raw, "info.json.xz")
 	raw = strings.TrimSpace(raw)
 	if i := strings.IndexAny(raw, "?#"); i >= 0 {

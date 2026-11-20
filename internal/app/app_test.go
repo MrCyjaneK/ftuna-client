@@ -175,7 +175,7 @@ func (emptyBus) ListRepos() ([]install.Repo, error) {
 	return []install.Repo{{Alias: "ftuna-oss", URL: "https://repo-oss.ftuna.eu/5.1.0.11/aarch64/"}}, nil
 }
 func (emptyBus) AddRepo(alias, raw string) error { return nil }
-func (emptyBus) Refresh() error                  { return nil }
+func (emptyBus) Refresh(bool) error              { return nil }
 func (emptyBus) Resolve(names []string) ([]install.Found, error) {
 	return nil, nil
 }
@@ -290,6 +290,128 @@ func TestScratchRepoJoinsExistingPackage(t *testing.T) {
 	}
 	if _, err := application.Package("harbour-mullvad"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestArchRepositoryReadsRPM(t *testing.T) {
+	sfos := gzipBytes(t, []byte(`
+<metadata>
+  <package type="rpm">
+    <name>harbour-sfos</name>
+    <arch>aarch64</arch>
+    <version epoch="0" ver="1.2" rel="3"/>
+    <summary>SFOS package</summary>
+    <description>From an arch placeholder</description>
+    <format><rpm:sourcerpm>harbour-sfos-1.2-3.src.rpm</rpm:sourcerpm></format>
+  </package>
+</metadata>`))
+	pinned := gzipBytes(t, []byte(`
+<metadata>
+  <package type="rpm">
+    <name>harbour-pinned</name>
+    <arch>aarch64</arch>
+    <version epoch="0" ver="4.0" rel="1"/>
+    <summary>Pinned arch</summary>
+    <description>Hardcoded architecture directory</description>
+    <format><rpm:sourcerpm>harbour-pinned-4.0-1.src.rpm</rpm:sourcerpm></format>
+  </package>
+</metadata>`))
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/info.json.xz":
+			w.Header().Set("ETag", `"1"`)
+			if r.Method == http.MethodHead {
+				return
+			}
+			w.Write(mustXZ(t, sampleDoc(t, "")))
+		case "/sfos/info.json.xz", "/pinned/aarch64/info.json.xz":
+			http.NotFound(w, r)
+		case "/sfos/aarch64/repodata/repomd.xml":
+			w.Write([]byte(`<repomd><data type="primary"><location href="repodata/primary.xml.gz"/></data></repomd>`))
+		case "/sfos/aarch64/repodata/primary.xml.gz":
+			w.Write(sfos)
+		case "/pinned/aarch64/repodata/repomd.xml":
+			w.Write([]byte(`<repomd><data type="primary"><location href="repodata/primary.xml.gz"/></data></repomd>`))
+		case "/pinned/aarch64/repodata/primary.xml.gz":
+			w.Write(pinned)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	application, err := Open(Config{
+		CacheDir: dir, ConfigDir: dir, IndexURL: srv.URL + "/info.json.xz",
+		Release: "5.2.0.17", Arch: "aarch64",
+		System: &emptyBus{}, HTTP: srv.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := application.SaveSettings([]byte(`{"onboarded":true,"repositories":[` +
+		`{"id":"oss","enabled":true},{"id":"chum","enabled":false},{"id":"openrepos","enabled":false},` +
+		`{"title":"SFOS","enabled":true,"url":"` + srv.URL + `/sfos/%(arch)/"},` +
+		`{"title":"Pinned","enabled":true,"url":"` + srv.URL + `/pinned/aarch64/"}` +
+		`]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sfosURL, pinnedURL string
+	for _, repo := range saved.Repositories {
+		switch repo.Title {
+		case "SFOS":
+			sfosURL = repo.URL
+		case "Pinned":
+			pinnedURL = repo.URL
+		}
+	}
+	if sfosURL != srv.URL+"/sfos/{arch}/" || pinnedURL != srv.URL+"/pinned/aarch64/" {
+		t.Fatalf("sfos %s pinned %s", sfosURL, pinnedURL)
+	}
+	if err := application.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := application.Listing()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Catalogs []CatalogInfo `json:"catalogs"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]CatalogInfo{}
+	for _, info := range body.Catalogs {
+		seen[info.Title] = info
+	}
+	if seen["SFOS"].Error != "" || seen["SFOS"].URL != srv.URL+"/sfos/aarch64/" || seen["SFOS"].ChosenRelease != "" || seen["SFOS"].Fallback {
+		t.Fatalf("sfos %+v", seen["SFOS"])
+	}
+	if seen["Pinned"].Error != "" || seen["Pinned"].URL != srv.URL+"/pinned/aarch64/" || seen["Pinned"].Fallback {
+		t.Fatalf("pinned %+v", seen["Pinned"])
+	}
+	pkg, err := application.Package("harbour-sfos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got shown
+	if err := json.Unmarshal(pkg, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Sources) != 1 || got.Sources[0].Title != "SFOS" || got.Sources[0].Version != "1.2-3" || !strings.HasSuffix(got.Sources[0].RepoURL, "/sfos/aarch64/") {
+		t.Fatalf("%+v", got)
+	}
+	pkg, err = application.Package("harbour-pinned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(pkg, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Sources) != 1 || got.Sources[0].Title != "Pinned" || got.Sources[0].Version != "4.0-1" || !strings.HasSuffix(got.Sources[0].RepoURL, "/pinned/aarch64/") {
+		t.Fatalf("%+v", got)
 	}
 }
 

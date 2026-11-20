@@ -12,18 +12,25 @@ import (
 	"github.com/mrcyjanek/ftuna/client/internal/layout"
 )
 
-// loadResolved fills {version} and {arch} from the directory listing, then reads rpm-md.
-// It tries the newest suitable release first and steps back when that directory has no metadata.
+// loadResolved fills {version} and {arch}, then reads rpm-md.
+// A version pattern uses the directory listing and tries the newest suitable release first.
+// {arch} is the phone's architecture and needs no listing.
 func (a *App) loadResolved(pref RepoPref) (catalog.View, error) {
 	client := a.client
 	if client == nil {
 		client = http.DefaultClient
 	}
-	page, err := getBody(client, layout.Prefix(pref.URL))
-	if err != nil {
-		return catalog.View{}, err
+	var hits []layout.Hit
+	var err error
+	if layout.NeedsListing(pref.URL) {
+		page, getErr := getBody(client, layout.Prefix(pref.URL))
+		if getErr != nil {
+			return catalog.View{}, getErr
+		}
+		hits, err = layout.Matches(pref.URL, a.release, a.arch, string(page))
+	} else {
+		hits, err = layout.Matches(pref.URL, a.release, a.arch, "")
 	}
-	hits, err := layout.Matches(pref.URL, a.release, a.arch, string(page))
 	if err != nil {
 		return catalog.View{}, err
 	}
@@ -64,7 +71,11 @@ func (a *App) readRepo(client *http.Client, pref RepoPref, hit layout.Hit) (cata
 			return catalog.View{}, err
 		}
 	}
-	repoID := sanitizeID(pref.ID + "-" + hit.Version + "-" + a.arch)
+	id := pref.ID + "-" + a.arch
+	if hit.Version != "" {
+		id = pref.ID + "-" + hit.Version + "-" + a.arch
+	}
+	repoID := sanitizeID(id)
 	pkgs, err := chum.Packages(raw, repoID, hit.URL)
 	if err != nil {
 		return catalog.View{}, err
@@ -89,20 +100,19 @@ func (a *App) readRepo(client *http.Client, pref RepoPref, hit layout.Hit) (cata
 	}, nil
 }
 
-// loadFlatArch reads <repo>/<arch>/repodata for a repository that has no info.json.xz.
+// loadFlatArch reads rpm-md for a repository that has no info.json.xz.
+// A URL that already ends in an architecture is used as written.
+// A parent URL is read at <repo>/<arch>/repodata.
 func (a *App) loadFlatArch(pref RepoPref) (catalog.View, error) {
 	client := a.client
 	if client == nil {
 		client = http.DefaultClient
 	}
-	base := strings.TrimRight(pref.URL, "/")
-	base = strings.TrimSuffix(base, "/info.json.xz")
-	base = strings.TrimRight(base, "/") + "/"
-	arch := catalog.NormalizeArch(a.arch)
-	if arch == "" {
-		return catalog.View{}, fmt.Errorf("no architecture")
+	dir, err := layout.RPMDir(pref.URL, a.arch)
+	if err != nil {
+		return catalog.View{}, err
 	}
-	return a.readRepo(client, pref, layout.Hit{URL: base + arch + "/"})
+	return a.readRepo(client, pref, layout.Hit{URL: dir})
 }
 
 func upstreamChum(raw string) bool {

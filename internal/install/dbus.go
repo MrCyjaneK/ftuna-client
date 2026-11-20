@@ -107,8 +107,10 @@ func (d *DBus) modifyRepo(action int, alias string) error {
 	return d.conn.Object(ssuDest, ssuPath).Call(ssuIface+".modifyRepo", 0, int32(action), alias).Store()
 }
 
-func (d *DBus) Refresh() error {
-	_, err := d.transact("RefreshCache", false)
+// Refresh runs PackageKit RefreshCache.
+// force downloads repository metadata again when PackageKit still considers the cache valid.
+func (d *DBus) Refresh(force bool) error {
+	_, err := d.transact("RefreshCache", force)
 	return err
 }
 

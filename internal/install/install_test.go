@@ -63,8 +63,8 @@ func TestPackagesInstallsResolvedID(t *testing.T) {
 	if len(fake.installed) != 1 || fake.installed[0] != fake.resolved[0].ID {
 		t.Fatalf("%v", fake.installed)
 	}
-	if !fake.refreshed {
-		t.Fatal("cache was not refreshed")
+	if !fake.refreshed || fake.forced {
+		t.Fatal("a new repository should refresh without forcing every cache")
 	}
 }
 
@@ -83,8 +83,8 @@ func TestUnversionedSkipsNewerInstalled(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "already") || !strings.Contains(err.Error(), "installed") {
 		t.Fatal(err)
 	}
-	if !fake.refreshed {
-		t.Fatal("cache was not refreshed")
+	if !fake.forced {
+		t.Fatal("stale cache was not force-refreshed")
 	}
 }
 
@@ -123,8 +123,8 @@ func TestRefreshThenInstallsCatalogBuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !fake.refreshed || len(ids) != 1 || ids[0] != nextID {
-		t.Fatalf("refreshed %v ids %v", fake.refreshed, ids)
+	if !fake.forced || len(ids) != 1 || ids[0] != nextID {
+		t.Fatalf("forced %v ids %v", fake.forced, ids)
 	}
 }
 
@@ -142,8 +142,8 @@ func TestMissingBuildNamesWhatTheRepositoryHas(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "0.5.4-1.2.1.bso") || !strings.Contains(err.Error(), alias) {
 		t.Fatal(err)
 	}
-	if !fake.refreshed {
-		t.Fatal("cache was not refreshed")
+	if !fake.forced {
+		t.Fatal("stale cache was not force-refreshed")
 	}
 }
 
@@ -176,6 +176,7 @@ type fakeSys struct {
 	resolves  [][]Found
 	installed []string
 	refreshed bool
+	forced    bool
 }
 
 func (f *fakeSys) ListRepos() ([]Repo, error) { return append([]Repo{}, f.added...), nil }
@@ -297,7 +298,13 @@ func TestRepoEnabledSkipsUninstalledPublisher(t *testing.T) {
 		t.Fatal("another publisher is not installed")
 	}
 }
-func (f *fakeSys) Refresh() error { f.refreshed = true; return nil }
+func (f *fakeSys) Refresh(force bool) error {
+	f.refreshed = true
+	if force {
+		f.forced = true
+	}
+	return nil
+}
 func (f *fakeSys) Resolve(names []string) ([]Found, error) {
 	if len(f.resolves) > 0 {
 		out := f.resolves[0]

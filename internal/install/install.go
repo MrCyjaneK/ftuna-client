@@ -65,7 +65,7 @@ type Plan struct {
 type System interface {
 	ListRepos() ([]Repo, error)
 	AddRepo(alias, url string) error
-	Refresh() error
+	Refresh(force bool) error
 	Resolve(names []string) ([]Found, error)
 	Installed(names []string) ([]Found, error)
 	Simulate(ids []string) ([]Found, error)
@@ -225,8 +225,9 @@ func chumChannel(raw string) string {
 // The caller installs those ids with PackageKit::Daemon::installPackages.
 //
 // The id comes from the repository PackageKit can see. A catalog build that
-// is missing from the cache is refreshed once. When that build is present it
-// is installed. Otherwise the newest build in the repository is installed
+// is missing from the cache is force-refreshed once, so a cache PackageKit
+// still considers valid cannot hide it. When that build is present it is
+// installed. Otherwise the newest build in the repository is installed
 // when it is newer than what is already on the phone.
 func PackageIDs(sys System, repoURL string, chosen []catalog.RPM) ([]string, error) {
 	if len(chosen) == 0 {
@@ -237,7 +238,7 @@ func PackageIDs(sys System, repoURL string, chosen []catalog.RPM) ([]string, err
 		return nil, err
 	}
 	if added {
-		if err := sys.Refresh(); err != nil {
+		if err := sys.Refresh(false); err != nil {
 			return nil, err
 		}
 	}
@@ -255,7 +256,7 @@ func PackageIDs(sys System, repoURL string, chosen []catalog.RPM) ([]string, err
 		return nil, err
 	}
 	if !added && cacheBehind(found, chosen, alias) {
-		if err := sys.Refresh(); err != nil {
+		if err := sys.Refresh(true); err != nil {
 			return nil, err
 		}
 		found, err = sys.Resolve(names)
